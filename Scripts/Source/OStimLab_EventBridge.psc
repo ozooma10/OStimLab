@@ -141,11 +141,11 @@ Event OStimOrgasm(String EventName, String Args, Float Nothing, Form Sender)
     endif
 
     ; On Orgasm we need to send the SexlabOrgasm event, And Either OrgasmStart/End (Both To catch all mods) or the SLSO SexLabOrgasmSeparate if installed
-    
-    ;Update The animation tags to have tags based off actions performed this scene
-    UpdateAnimationTags()
 
     if(ActiveSexlabThread && EnableSceneOrgasmEvent)
+        ;Update The animation tags to have tags based off actions performed this scene
+        UpdateAnimationTags()
+
         actor orgasmer = ostim.GetMostRecentOrgasmedActor()
         ;Need to manually create SexlabOrgasm event since special case
         int eid = ModEvent.Create("SexLabOrgasm")
@@ -181,38 +181,21 @@ Event OStimSceneChanged(String EventName, String Args, Float Nothing, Form Sende
     if(!SexLabUtil.SexLabIsReady())
         return
     endif
-    
-    string TagToAdd = ""
-    ;On Scene Change add to the tag array to indicate what we are doing
-    string cClass = OStim.GetCurrentAnimationClass()
 
-    if(cclass == "Sx") ;Sex
-        TagToAdd = "Vaginal"
-    elseif(cclass == "An") ;Anal
-        TagToAdd = "Anal"
-    elseif(cclass == "Boj" || cclass == "BoF") ;Boobjob
-        TagToAdd = "Boobjob"
-    elseif(cclass == "VJ") ;Cunnilingus
-        TagToAdd = "Cunnilingus,Oral"
-    elseif(cclass == "HJ" || cclass == "ApHJ" || cclass == "DHJ") ;Handjob
-        TagToAdd = "Handjob"
-    elseif(cclass == "Cr" || cclass == "Pf1" || cclass == "Pf2") ;Fingering    
-        TagToAdd = "Fisting"
-    elseif(cclass == "BJ" || cclass == "ApPJ" || cclass == "SJ" || cclass == "hhPJ" || cclass == "hhBJ")    ;Blowjob
-        TagToAdd = "Blowjob,Oral"
-    elseif(cclass == "Po" || cclass == "HhPo") ;Masturbation
-        TagToAdd = "Masturbation"
-    elseif(cclass == "VBJ" || cclass == "VHJ") ;69
-        TagToAdd = "69"
-    elseif(cclass == "FJ") ;Footjob
-        TagToAdd = "Footjob"
+    ;On Scene Change, pull the new scene's action types from OStim metadata and accumulate
+    ;the equivalent Sexlab tags. OStim SA removed GetCurrentAnimationClass() / the 2-letter
+    ;OSA class codes; scenes now expose explicit action types (vaginalsex, blowjob, ...).
+    string sceneId = OStim.GetCurrentAnimationSceneID()
+    if(sceneId != "")
+        string[] actions = OMetadata.GetActionTypes(sceneId)
+        int i = 0
+        while(i < actions.Length)
+            AddSexlabTagsForAction(actions[i])
+            i += 1
+        endwhile
     endif
 
-    if(TagToAdd != "" && PapyrusUtil.CountString(ScenePerformedTags, TagToAdd) == 0)
-        ScenePerformedTags = PapyrusUtil.PushString(ScenePerformedTags, TagToAdd)
-    endif
-
-    if(EnableSceneEndEvent)
+    if(ActiveSexlabThread && EnableAnimationChangeEvent)
         UpdateAnimationTags()
         Log("Sending AnimationChange Event")
         ActiveSexlabThread.SendThreadEvent("AnimationChange")
@@ -234,17 +217,18 @@ bool function GenerateSexlabThread()
 
     ActiveSexlabThread.AddTag("OStimLab")
 
-	Actor[] ostimActors = SexLabUtil.MakeActorArray(OStim.GetDomActor(), OStim.GetSubActor(), OStim.GetThirdActor())
+	;OStim SA scenes can have more than 3 actors; use the full cast instead of Dom/Sub/Third
+	Actor[] ostimActors = OStim.GetActors()
 
     Actor victim = none
     if(OStim.IsSceneAggressiveThemed())
-        victim = OStim.GetSubActor()
-        if(!OStim.IsVictim(victim))
-            victim = Ostim.GetDomActor()
-            if(!OStim.IsVictim(victim))
-                victim = none
+        int v = 0
+        while(v < ostimActors.Length && victim == none)
+            if(ostimActors[v] && OStim.IsVictim(ostimActors[v]))
+                victim = ostimActors[v]
             endif
-        endif
+            v += 1
+        endwhile
     endif
 
     if(!ActiveSexlabThread.AddActors(ostimActors, victim))
@@ -280,6 +264,69 @@ function UpdateAnimationTags()
     anim.Save(-1)
 endfunction
 
+;Maps an OStim SA action type (see SKSE/Plugins/OStim/actions/*.json) to one or more
+;Sexlab tags and pushes them onto ScenePerformedTags, deduped per individual tag.
+;Foreplay/holding/groping actions are intentionally left unmapped (not meaningful as Sexlab acts).
+function AddSexlabTagsForAction(string actionType)
+    string tags = ""
+    if(actionType == "vaginalsex")
+        tags = "Vaginal"
+    elseif(actionType == "vaginalfingering")
+        tags = "Vaginal,Fingering"
+    elseif(actionType == "vaginalfisting")
+        tags = "Vaginal,Fisting"
+    elseif(actionType == "vaginaltoying")
+        tags = "Vaginal,Toys"
+    elseif(actionType == "analsex")
+        tags = "Anal"
+    elseif(actionType == "analfingering")
+        tags = "Anal,Fingering"
+    elseif(actionType == "analfisting")
+        tags = "Anal,Fisting"
+    elseif(actionType == "analtoying")
+        tags = "Anal,Toys"
+    elseif(actionType == "blowjob" || actionType == "lickingpenis" || actionType == "lickingtesticles")
+        tags = "Blowjob,Oral"
+    elseif(actionType == "deepthroat")
+        tags = "Blowjob,Oral,Deepthroat"
+    elseif(actionType == "cunnilingus" || actionType == "lickingvagina")
+        tags = "Cunnilingus,Oral"
+    elseif(actionType == "anilingus" || actionType == "rimjob")
+        tags = "Anilingus,Oral"
+    elseif(actionType == "boobjob")
+        tags = "Boobjob"
+    elseif(actionType == "buttjob")
+        tags = "Buttjob"
+    elseif(actionType == "handjob")
+        tags = "Handjob"
+    elseif(actionType == "footjob" || actionType == "grindingfoot")
+        tags = "Footjob"
+    elseif(actionType == "thighjob" || actionType == "grindingthigh")
+        tags = "Thighjob"
+    elseif(actionType == "femalemasturbation" || actionType == "malemasturbation")
+        tags = "Masturbation"
+    elseif(actionType == "tribbing")
+        tags = "Tribbing,Vaginal"
+    elseif(actionType == "facial")
+        tags = "Facial,Oral"
+    elseif(actionType == "kissing" || actionType == "frenchkissing")
+        tags = "Kissing"
+    endif
+
+    if(tags == "")
+        return
+    endif
+
+    string[] splitTags = PapyrusUtil.StringSplit(tags, ",")
+    int i = 0
+    while(i < splitTags.Length)
+        if(PapyrusUtil.CountString(ScenePerformedTags, splitTags[i]) == 0)
+            ScenePerformedTags = PapyrusUtil.PushString(ScenePerformedTags, splitTags[i])
+        endif
+        i += 1
+    endwhile
+endfunction
+
 event OnUpdate()
     ;Here we want keep the sexlab thread alive if we are in an ostim scene
     if(ActiveSexlabThread && ActiveSexlabThread.HasTag("OStimLab"))
@@ -299,15 +346,14 @@ event OnUpdate()
 endevent
 
 function RecordStatsForParticipants()
-    if(OStim.GetDomActor())
-        RecordStatsForOStimActor(Ostim.GetDomActor())
-    endif
-    if(OStim.GetSubActor())
-        RecordStatsForOStimActor(Ostim.GetSubActor())
-    endif
-    if(OStim.GetThirdActor())
-        RecordStatsForOStimActor(Ostim.GetThirdActor())
-    endif
+    Actor[] participants = OStim.GetActors()
+    int i = 0
+    while(i < participants.Length)
+        if(participants[i])
+            RecordStatsForOStimActor(participants[i])
+        endif
+        i += 1
+    endwhile
 endfunction
 
 function RecordStatsForOStimActor(Actor act)

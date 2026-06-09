@@ -45,14 +45,14 @@ event OnOptionSelect(int optionId)
 endevent
 
 event OnOptionHighlight(int optionId)
-    if(CurrentPage == "$EVENT_SETTINGS")
+    if(CurrentPage == "Event Settings" || CurrentPage == "")
         if(optionId == EnableSceneStartEventOid)
             SetInfoText("If Enabled will Trigger a Sexlab 'AnimationStart' event when ostim_start is received")
         elseif(optionId == EnableSceneEndEventOid)
             SetInfoText("If Enabled will Trigger a Sexlab 'AnimationEnd' event when ostim_end is received")
         elseif(optionId == EnableSceneOrgasmEventOid)
             SetInfoText("If Enabled will Trigger a Sexlab 'OrgasmStart' (OR SexLabOrgasmSeparate if SLSO specified) AND SexLabOrgasm event when ostim_orgasm is received")
-        elseif(optionId == EnableSceneOrgasmEventOid)
+        elseif(optionId == EnableAnimationChangeEventOid)
             SetInfoText("If Enabled will Trigger a Sexlab 'AnimationChange' event when ostim_scenechanged is received")
         EndIf
     EndIf
